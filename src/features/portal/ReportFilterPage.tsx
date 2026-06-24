@@ -122,6 +122,13 @@ function normalizeCheckboxSelection(
   selection: string[],
 ) {
   const lockValues = new Set(filter.lockValues ?? []);
+  const hasLockedValues = lockValues.size > 0;
+
+  if (hasLockedValues) {
+    // "해제 불가 + 전체 선택" 규칙: 고정값만 선택 유지, 나머지는 비활성.
+    return filter.options.filter((option) => lockValues.has(option));
+  }
+
   const set = new Set(selection);
 
   lockValues.forEach((value) => set.add(value));
@@ -373,17 +380,25 @@ export function ReportFilterPage({
                           const selected = isStringArray(currentValue) ? currentValue : [];
                           const checked = selected.includes(option);
                           const isLocked = (filter.lockValues ?? []).includes(option);
+                          const hasLockedValues = (filter.lockValues ?? []).length > 0;
+                          const disabledBecauseLockedGroup = hasLockedValues && !isLocked;
 
                           return (
                             <label
                               key={option}
-                              className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-sm"
+                              className={`flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-sm ${
+                                disabledBecauseLockedGroup
+                                  ? "opacity-60"
+                                  : ""
+                              }`}
                             >
                               <input
                                 type="checkbox"
                                 className="size-4 accent-[var(--color-brand)]"
                                 checked={checked}
-                                disabled={isLocked && checked}
+                                disabled={
+                                  (isLocked && checked) || disabledBecauseLockedGroup
+                                }
                                 onChange={() => {
                                   setValues((prev) => {
                                     const before = prev[filter.id];
@@ -411,9 +426,9 @@ export function ReportFilterPage({
                                 }}
                               />
                               <span>{option}</span>
-                              {isLocked ? (
+                              {isLocked || disabledBecauseLockedGroup ? (
                                 <span className="ml-auto text-xs text-[var(--color-foreground-muted)]">
-                                  해제불가
+                                  {isLocked ? "해제불가" : "선택불가"}
                                 </span>
                               ) : null}
                             </label>
