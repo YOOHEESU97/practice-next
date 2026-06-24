@@ -258,7 +258,6 @@ export const LNB_SECTIONS: LnbSectionDefinition[] = [
               "KB스타드림 룰렛",
             ],
             required: true,
-            lockValues: ["전체"],
             enableSelectAll: true,
           },
         ],
