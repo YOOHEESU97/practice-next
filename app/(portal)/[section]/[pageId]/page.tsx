@@ -23,6 +23,7 @@ export default async function PortalPage({ params }: PortalPageProps) {
 
   return (
     <ReportFilterPage
+      key={`${matchedSection.slug}-${matchedPage.slug}`}
       sectionTitle={matchedSection.title}
       pageTitle={matchedPage.title}
       filters={matchedPage.filters}

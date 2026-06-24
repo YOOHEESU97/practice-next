@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   CheckboxFilterDefinition,
   DatePrecision,
@@ -183,6 +183,11 @@ function isStringArray(value: FilterValue): value is string[] {
   return Array.isArray(value);
 }
 
+function toDateRangeValue(value: FilterValue): DateRangeValue {
+  if (isDateRangeValue(value)) return value;
+  return { start: "", end: "", selectedPreset: "custom" };
+}
+
 export function ReportFilterPage({
   sectionTitle,
   pageTitle,
@@ -190,11 +195,6 @@ export function ReportFilterPage({
 }: ReportFilterPageProps) {
   const [values, setValues] = useState<FilterValues>(() => createInitialValues(filters));
   const [lastSubmitted, setLastSubmitted] = useState<FilterValues | null>(null);
-
-  useEffect(() => {
-    setValues(createInitialValues(filters));
-    setLastSubmitted(null);
-  }, [filters]);
 
   const filterCount = filters.length;
   const serializableValues = useMemo(
@@ -224,217 +224,220 @@ export function ReportFilterPage({
               setLastSubmitted(values);
             }}
           >
-            {filters.map((filter) => (
-              <div key={filter.id} className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
-                <label className="block text-sm font-semibold">{filter.label}</label>
+            {filters.map((filter) => {
+              const currentValue = values[filter.id];
+              const dateValue = toDateRangeValue(currentValue);
 
-                {filter.type === "date-range" ? (
-                  <div className="mt-3 space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {filter.presets.map((preset) => {
-                        const current = values[filter.id];
-                        const selected =
-                          isDateRangeValue(current) && current.selectedPreset === preset.key;
+              return (
+                <div
+                  key={filter.id}
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4"
+                >
+                  <label className="block text-sm font-semibold">{filter.label}</label>
 
-                        return (
-                          <button
-                            key={preset.key}
-                            type="button"
-                            className={`rounded-[var(--radius-md)] border px-3 py-1.5 text-xs transition-colors ${
-                              selected
-                                ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-brand-fg)]"
-                                : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-foreground-muted)] hover:bg-[var(--color-muted)]"
-                            }`}
-                            onClick={() => {
-                              const computed = computeRangeByPreset(
-                                preset.key,
-                                filter.precision,
-                              );
+                  {filter.type === "date-range" ? (
+                    <div className="mt-3 space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {filter.presets.map((preset) => {
+                          const selected = dateValue.selectedPreset === preset.key;
 
-                              setValues((prev) => {
-                                const before = prev[filter.id];
-                                if (!isDateRangeValue(before)) return prev;
+                          return (
+                            <button
+                              key={preset.key}
+                              type="button"
+                              className={`rounded-[var(--radius-md)] border px-3 py-1.5 text-xs transition-colors ${
+                                selected
+                                  ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-brand-fg)]"
+                                  : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-foreground-muted)] hover:bg-[var(--color-muted)]"
+                              }`}
+                              onClick={() => {
+                                const computed = computeRangeByPreset(
+                                  preset.key,
+                                  filter.precision,
+                                );
 
-                                return {
-                                  ...prev,
-                                  [filter.id]: {
-                                    start: computed?.start ?? before.start,
-                                    end: computed?.end ?? before.end,
-                                    selectedPreset: preset.key,
-                                  },
-                                };
-                              });
-                            }}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Input
-                        type={precisionInputType(filter.precision)}
-                        value={
-                          isDateRangeValue(values[filter.id]) ? values[filter.id].start : ""
-                        }
-                        onChange={(event) => {
-                          const nextValue = event.target.value;
-                          setValues((prev) => {
-                            const before = prev[filter.id];
-                            if (!isDateRangeValue(before)) return prev;
-
-                            return {
-                              ...prev,
-                              [filter.id]: {
-                                ...before,
-                                start: nextValue,
-                                selectedPreset: "custom",
-                              },
-                            };
-                          });
-                        }}
-                        placeholder="시작"
-                      />
-                      <Input
-                        type={precisionInputType(filter.precision)}
-                        value={isDateRangeValue(values[filter.id]) ? values[filter.id].end : ""}
-                        onChange={(event) => {
-                          const nextValue = event.target.value;
-                          setValues((prev) => {
-                            const before = prev[filter.id];
-                            if (!isDateRangeValue(before)) return prev;
-
-                            return {
-                              ...prev,
-                              [filter.id]: {
-                                ...before,
-                                end: nextValue,
-                                selectedPreset: "custom",
-                              },
-                            };
-                          });
-                        }}
-                        placeholder="종료"
-                      />
-                    </div>
-
-                    <p className="text-xs text-[var(--color-foreground-muted)]">
-                      {precisionHint(filter.precision)} / 현재 프리셋:{" "}
-                      {isDateRangeValue(values[filter.id])
-                        ? PRESET_DESCRIPTIONS[values[filter.id].selectedPreset] ?? "사용자 지정"
-                        : "사용자 지정"}
-                    </p>
-                  </div>
-                ) : null}
-
-                {filter.type === "select" ? (
-                  <div className="mt-3">
-                    <select
-                      className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/25"
-                      value={typeof values[filter.id] === "string" ? values[filter.id] : ""}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setValues((prev) => ({ ...prev, [filter.id]: nextValue }));
-                      }}
-                    >
-                      {filter.options.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {filter.type === "checkbox" ? (
-                  <div className="mt-3 space-y-3">
-                    {filter.enableSelectAll ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="text-xs"
-                        onClick={() => {
-                          setValues((prev) => ({
-                            ...prev,
-                            [filter.id]: normalizeCheckboxSelection(filter, [...filter.options]),
-                          }));
-                        }}
-                      >
-                        전체 선택
-                      </Button>
-                    ) : null}
-
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {filter.options.map((option) => {
-                        const current = values[filter.id];
-                        const selected = isStringArray(current) ? current : [];
-                        const checked = selected.includes(option);
-                        const isLocked = (filter.lockValues ?? []).includes(option);
-
-                        return (
-                          <label
-                            key={option}
-                            className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-sm"
-                          >
-                            <input
-                              type="checkbox"
-                              className="size-4 accent-[var(--color-brand)]"
-                              checked={checked}
-                              disabled={isLocked && checked}
-                              onChange={() => {
                                 setValues((prev) => {
                                   const before = prev[filter.id];
-                                  const selectedValues = isStringArray(before)
-                                    ? [...before]
-                                    : [];
-
-                                  let nextValues = selectedValues;
-                                  if (selectedValues.includes(option)) {
-                                    nextValues = selectedValues.filter(
-                                      (item) => item !== option,
-                                    );
-                                  } else {
-                                    nextValues = [...selectedValues, option];
-                                  }
+                                  if (!isDateRangeValue(before)) return prev;
 
                                   return {
                                     ...prev,
-                                    [filter.id]: normalizeCheckboxSelection(
-                                      filter,
-                                      nextValues,
-                                    ),
+                                    [filter.id]: {
+                                      start: computed?.start ?? before.start,
+                                      end: computed?.end ?? before.end,
+                                      selectedPreset: preset.key,
+                                    },
                                   };
                                 });
                               }}
-                            />
-                            <span>{option}</span>
-                            {isLocked ? (
-                              <span className="ml-auto text-xs text-[var(--color-foreground-muted)]">
-                                해제불가
-                              </span>
-                            ) : null}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                {filter.type === "text" ? (
-                  <div className="mt-3">
-                    <Input
-                      value={typeof values[filter.id] === "string" ? values[filter.id] : ""}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setValues((prev) => ({ ...prev, [filter.id]: nextValue }));
-                      }}
-                      placeholder={filter.placeholder ?? `${filter.label} 입력`}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ))}
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Input
+                          type={precisionInputType(filter.precision)}
+                          value={dateValue.start}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setValues((prev) => {
+                              const before = prev[filter.id];
+                              if (!isDateRangeValue(before)) return prev;
+
+                              return {
+                                ...prev,
+                                [filter.id]: {
+                                  ...before,
+                                  start: nextValue,
+                                  selectedPreset: "custom",
+                                },
+                              };
+                            });
+                          }}
+                          placeholder="시작"
+                        />
+                        <Input
+                          type={precisionInputType(filter.precision)}
+                          value={dateValue.end}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setValues((prev) => {
+                              const before = prev[filter.id];
+                              if (!isDateRangeValue(before)) return prev;
+
+                              return {
+                                ...prev,
+                                [filter.id]: {
+                                  ...before,
+                                  end: nextValue,
+                                  selectedPreset: "custom",
+                                },
+                              };
+                            });
+                          }}
+                          placeholder="종료"
+                        />
+                      </div>
+
+                      <p className="text-xs text-[var(--color-foreground-muted)]">
+                        {precisionHint(filter.precision)} / 현재 프리셋:{" "}
+                        {PRESET_DESCRIPTIONS[dateValue.selectedPreset]}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {filter.type === "select" ? (
+                    <div className="mt-3">
+                      <select
+                        className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/25"
+                        value={typeof currentValue === "string" ? currentValue : ""}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setValues((prev) => ({ ...prev, [filter.id]: nextValue }));
+                        }}
+                      >
+                        {filter.options.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  {filter.type === "checkbox" ? (
+                    <div className="mt-3 space-y-3">
+                      {filter.enableSelectAll ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="text-xs"
+                          onClick={() => {
+                            setValues((prev) => ({
+                              ...prev,
+                              [filter.id]: normalizeCheckboxSelection(filter, [
+                                ...filter.options,
+                              ]),
+                            }));
+                          }}
+                        >
+                          전체 선택
+                        </Button>
+                      ) : null}
+
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {filter.options.map((option) => {
+                          const selected = isStringArray(currentValue) ? currentValue : [];
+                          const checked = selected.includes(option);
+                          const isLocked = (filter.lockValues ?? []).includes(option);
+
+                          return (
+                            <label
+                              key={option}
+                              className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                className="size-4 accent-[var(--color-brand)]"
+                                checked={checked}
+                                disabled={isLocked && checked}
+                                onChange={() => {
+                                  setValues((prev) => {
+                                    const before = prev[filter.id];
+                                    const selectedValues = isStringArray(before)
+                                      ? [...before]
+                                      : [];
+
+                                    let nextValues = selectedValues;
+                                    if (selectedValues.includes(option)) {
+                                      nextValues = selectedValues.filter(
+                                        (item) => item !== option,
+                                      );
+                                    } else {
+                                      nextValues = [...selectedValues, option];
+                                    }
+
+                                    return {
+                                      ...prev,
+                                      [filter.id]: normalizeCheckboxSelection(
+                                        filter,
+                                        nextValues,
+                                      ),
+                                    };
+                                  });
+                                }}
+                              />
+                              <span>{option}</span>
+                              {isLocked ? (
+                                <span className="ml-auto text-xs text-[var(--color-foreground-muted)]">
+                                  해제불가
+                                </span>
+                              ) : null}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {filter.type === "text" ? (
+                    <div className="mt-3">
+                      <Input
+                        value={typeof currentValue === "string" ? currentValue : ""}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setValues((prev) => ({ ...prev, [filter.id]: nextValue }));
+                        }}
+                        placeholder={filter.placeholder ?? `${filter.label} 입력`}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
 
             <div className="flex flex-wrap gap-2">
               <Button type="submit">조회 조건 적용</Button>
