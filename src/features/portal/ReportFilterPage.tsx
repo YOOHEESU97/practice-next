@@ -123,6 +123,7 @@ function normalizeCheckboxSelection(
 ) {
   const lockValues = new Set(filter.lockValues ?? []);
   const hasLockedValues = lockValues.size > 0;
+  const hasAllOption = filter.options.includes("전체");
 
   if (hasLockedValues) {
     // "해제 불가 + 전체 선택" 규칙: 고정값만 선택 유지, 나머지는 비활성.
@@ -130,11 +131,21 @@ function normalizeCheckboxSelection(
   }
 
   const set = new Set(selection);
+  const normalOptions = filter.options.filter((option) => option !== "전체");
 
-  lockValues.forEach((value) => set.add(value));
-
-  if (filter.required && set.size === 0 && filter.options.length > 0) {
-    set.add(filter.options[0]);
+  if (hasAllOption) {
+    if (set.has("전체")) {
+      filter.options.forEach((option) => set.add(option));
+    } else {
+      const isAllNormalSelected =
+        normalOptions.length > 0 &&
+        normalOptions.every((option) => set.has(option));
+      if (isAllNormalSelected) {
+        set.add("전체");
+      } else {
+        set.delete("전체");
+      }
+    }
   }
 
   return filter.options.filter((option) => set.has(option));
@@ -160,7 +171,7 @@ function createInitialValues(filters: FilterDefinition[]): FilterValues {
     }
 
     if (filter.type === "checkbox") {
-      const selected = normalizeCheckboxSelection(filter, []);
+      const selected = normalizeCheckboxSelection(filter, [...filter.options]);
       return [filter.id, selected];
     }
 
@@ -357,21 +368,28 @@ export function ReportFilterPage({
 
                   {filter.type === "checkbox" ? (
                     <div className="mt-3 space-y-3">
-                      {filter.enableSelectAll ? (
+                      {filter.enableSelectAll &&
+                      (filter.lockValues ?? []).length === 0 ? (
                         <Button
                           type="button"
                           variant="secondary"
                           className="text-xs"
                           onClick={() => {
+                            const selected = isStringArray(currentValue)
+                              ? currentValue
+                              : [];
+                            const isAllSelected = filter.options.every((option) =>
+                              selected.includes(option),
+                            );
+                            const nextValues = isAllSelected ? [] : [...filter.options];
+
                             setValues((prev) => ({
                               ...prev,
-                              [filter.id]: normalizeCheckboxSelection(filter, [
-                                ...filter.options,
-                              ]),
+                              [filter.id]: normalizeCheckboxSelection(filter, nextValues),
                             }));
                           }}
                         >
-                          전체 선택
+                          전체 선택/해제
                         </Button>
                       ) : null}
 
@@ -407,12 +425,26 @@ export function ReportFilterPage({
                                       : [];
 
                                     let nextValues = selectedValues;
+                                  const hasLockedValues =
+                                    (filter.lockValues ?? []).length > 0;
+                                  const hasAllOption =
+                                    filter.options.includes("전체");
+
+                                  if (!hasLockedValues && hasAllOption && option === "전체") {
+                                    const isAllSelected = filter.options.every((item) =>
+                                      selectedValues.includes(item),
+                                    );
+                                    nextValues = isAllSelected
+                                      ? []
+                                      : [...filter.options];
+                                    } else {
                                     if (selectedValues.includes(option)) {
                                       nextValues = selectedValues.filter(
                                         (item) => item !== option,
                                       );
                                     } else {
                                       nextValues = [...selectedValues, option];
+                                    }
                                     }
 
                                     return {
